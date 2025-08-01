@@ -1,14 +1,15 @@
 /* eslint-disable camelcase */
 
+exports.shorthands = undefined;
+
 exports.up = (pgm) => {
-  pgm.createTable('authentications', {
-    token: {
+  pgm.addColumn('albums', {
+    cover_url: {
       type: 'TEXT',
-      notNull: true,
     },
   });
 };
 
 exports.down = (pgm) => {
-  pgm.dropTable('authentications');
+  pgm.dropColumn('albums', 'cover_url');
 };

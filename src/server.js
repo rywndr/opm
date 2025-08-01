@@ -2,52 +2,67 @@ require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
 const Jwt = require('@hapi/jwt');
+const Inert = require('@hapi/inert');
+const path = require('path');
 const ClientError = require('./exceptions/ClientError');
 
-// Albums
+// albums
 const albums = require('./routes/albums');
 const AlbumsService = require('./services/AlbumsService');
 const AlbumsHandler = require('./handlers/AlbumsHandler');
 const AlbumsValidator = require('./validators/albums');
 
-// Songs
+// songs
 const songs = require('./routes/songs');
 const SongsService = require('./services/SongsService');
 const SongsHandler = require('./handlers/SongsHandler');
 const SongsValidator = require('./validators/songs');
 
-// Users
+// users
 const users = require('./routes/users');
 const UsersService = require('./services/UsersService');
 const UsersHandler = require('./handlers/UsersHandler');
 const UsersValidator = require('./validators/users');
 
-// Authentications
+// authentications
 const authentications = require('./routes/authentications');
 const AuthenticationsService = require('./services/AuthenticationsService');
 const AuthenticationsHandler = require('./handlers/AuthenticationsHandler');
 const TokenManager = require('./tokenize/TokenManager');
 const AuthenticationsValidator = require('./validators/authentications');
 
-// Playlists
+// playlists
 const playlists = require('./routes/playlists');
 const PlaylistsService = require('./services/PlaylistsService');
 const PlaylistsHandler = require('./handlers/PlaylistsHandler');
 const PlaylistsValidator = require('./validators/playlists');
 
-// Collaborations
+// collaborations
 const collaborations = require('./routes/collaborations');
 const CollaborationsService = require('./services/CollaborationsService');
 const CollaborationsHandler = require('./handlers/CollaborationsHandler');
 const CollaborationsValidator = require('./validators/collaborations');
 
+// exports - renamed to avoid conflict with reserved keyword
+const exportsRoutes = require('./routes/exports');
+const ExportsHandler = require('./handlers/ExportsHandler');
+const ProducerService = require('./services/ProducerService');
+const ExportsValidator = require('./validators/exports');
+
+// storage and cache
+const StorageService = require('./services/StorageService');
+const CacheService = require('./services/CacheService');
+const UploadsValidator = require('./validators/uploads');
+
 const init = async () => {
+  const cacheService = new CacheService();
   const collaborationsService = new CollaborationsService();
-  const albumsService = new AlbumsService();
+  const albumsService = new AlbumsService(cacheService);
   const songsService = new SongsService();
   const usersService = new UsersService();
   const authenticationsService = new AuthenticationsService();
   const playlistsService = new PlaylistsService(collaborationsService);
+  const storageService = new StorageService();
 
   const server = Hapi.server({
     port: process.env.PORT || 5000,
@@ -64,7 +79,21 @@ const init = async () => {
     {
       plugin: Jwt,
     },
+    {
+      plugin: Inert,
+    },
   ]);
+
+  // static file serving for uploads
+  server.route({
+    method: 'GET',
+    path: '/upload/{param*}',
+    handler: {
+      directory: {
+        path: path.resolve(__dirname, '../public'),
+      },
+    },
+  });
 
   // mendefinisikan strategy autentikasi jwt
   server.auth.strategy('openmusicapi_jwt', 'jwt', {
@@ -88,7 +117,12 @@ const init = async () => {
       plugin: {
         name: 'albums',
         register: async (server) => {
-          const albumsHandler = new AlbumsHandler(albumsService, AlbumsValidator);
+          const albumsHandler = new AlbumsHandler(
+            albumsService, 
+            storageService, 
+            AlbumsValidator, 
+            UploadsValidator
+          );
           server.route(albums(albumsHandler));
         },
       },
@@ -144,6 +178,19 @@ const init = async () => {
             CollaborationsValidator,
           );
           server.route(collaborations(collaborationsHandler));
+        },
+      },
+    },
+    {
+      plugin: {
+        name: 'exports',
+        register: async (server) => {
+          const exportsHandler = new ExportsHandler(
+            ProducerService,
+            playlistsService,
+            ExportsValidator,
+          );
+          server.route(exportsRoutes(exportsHandler)); // using renamed variable
         },
       },
     },
