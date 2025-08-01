@@ -1,0 +1,8 @@
+{
+  "migrationsTable": "pgmigrations",
+  "dir": "migrations",
+  "checkOrder": true,
+  "verbose": true,
+  "createSchema": true,
+  "createMigrationsSchema": false
+}
