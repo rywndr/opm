@@ -2,13 +2,15 @@ const { Pool } = require('pg');
 const { nanoid } = require('nanoid');
 const InvariantError = require('../exceptions/InvariantError');
 const NotFoundError = require('../exceptions/NotFoundError');
+const config = require('../utils/config');
 
 class SongsService {
   constructor() {
-    this._pool = new Pool();
+    this._pool = new Pool(config.database);
   }
 
-  async addSong({ title, year, genre, performer, duration, albumId }) {
+  async addSong(payload) {
+    const { title, year, genre, performer, duration, albumId } = payload;
     const id = `song-${nanoid(16)}`;
 
     const query = {
@@ -25,27 +27,14 @@ class SongsService {
     return result.rows[0].id;
   }
 
-  async getSongs(title, performer) {
-    let query = 'SELECT id, title, performer FROM songs';
-    const values = [];
-    const conditions = [];
-
-    if (title) {
-      conditions.push(`title ILIKE $${values.length + 1}`);
-      values.push(`%${title}%`);
-    }
-
-    if (performer) {
-      conditions.push(`performer ILIKE $${values.length + 1}`);
-      values.push(`%${performer}%`);
-    }
-
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(' AND ')}`;
-    }
-
-    const result = await this._pool.query(query, values);
-    return result.rows;
+  async getSongs(title = '', performer = '') {
+    const query = {
+      text: 'SELECT id, title, performer FROM songs WHERE title ILIKE $1 AND performer ILIKE $2',
+      values: [`%${title}%`, `%${performer}%`],
+    };
+    
+    const { rows } = await this._pool.query(query);
+    return rows;
   }
 
   async getSongById(id) {
@@ -71,7 +60,8 @@ class SongsService {
     };
   }
 
-  async editSongById(id, { title, year, genre, performer, duration, albumId }) {
+  async editSongById(id, payload) {
+    const { title, year, genre, performer, duration, albumId } = payload;
     const query = {
       text: 'UPDATE songs SET title = $1, year = $2, genre = $3, performer = $4, duration = $5, album_id = $6 WHERE id = $7 RETURNING id',
       values: [title, year, genre, performer, duration, albumId, id],
