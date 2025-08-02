@@ -101,7 +101,7 @@ class PlaylistsService {
 
   async getPlaylistForExport(playlistId) {
     const playlistQuery = {
-      text: `SELECT p.id, p.name FROM playlists p WHERE p.id = $1`,
+      text: 'SELECT p.id, p.name FROM playlists p WHERE p.id = $1',
       values: [playlistId],
     };
 

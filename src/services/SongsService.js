@@ -32,7 +32,7 @@ class SongsService {
       text: 'SELECT id, title, performer FROM songs WHERE title ILIKE $1 AND performer ILIKE $2',
       values: [`%${title}%`, `%${performer}%`],
     };
-    
+
     const { rows } = await this._pool.query(query);
     return rows;
   }

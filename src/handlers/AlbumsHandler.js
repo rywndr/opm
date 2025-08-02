@@ -96,7 +96,7 @@ class AlbumsHandler {
 
     // Check file size (max 512KB = 512000 bytes)
     const fileSize = cover._data ? cover._data.length : (cover.bytes || 0);
-    
+
     if (fileSize > 512000) {
       const response = h.response({
         status: 'fail',
@@ -113,7 +113,7 @@ class AlbumsHandler {
       // Upload to local file system
       const filename = await this._storageService.writeFile(cover, cover.hapi);
       const coverUrl = `http://${process.env.HOST}:${process.env.PORT}/upload/images/${filename}`;
-      
+
       await this._service.addAlbumCover(id, coverUrl);
     } catch (error) {
       console.error('Upload error:', error);

@@ -118,10 +118,10 @@ const init = async () => {
         name: 'albums',
         register: async (server) => {
           const albumsHandler = new AlbumsHandler(
-            albumsService, 
-            storageService, 
-            AlbumsValidator, 
-            UploadsValidator
+            albumsService,
+            storageService,
+            AlbumsValidator,
+            UploadsValidator,
           );
           server.route(albums(albumsHandler));
         },

@@ -16,12 +16,12 @@ class StorageService {
 
     return new Promise((resolve, reject) => {
       const fileStream = fs.createWriteStream(filePath);
-      
+
       fileStream.on('error', (error) => {
         console.error('File write error:', error);
         reject(error);
       });
-      
+
       fileStream.on('finish', () => {
         resolve(filename);
       });
