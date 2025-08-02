@@ -11,8 +11,7 @@
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "start:consumer": "node src/consumer.js"
+    "lint:fix": "eslint src/ --fix"
   },
   "keywords": [],
   "author": "",
@@ -29,7 +28,6 @@
     "jsonwebtoken": "^9.0.2",
     "nanoid": "^3.3.7",
     "node-pg-migrate": "^6.2.2",
-    "nodemailer": "^6.9.8",
     "pg": "^8.11.3",
     "redis": "^4.6.10"
   },
