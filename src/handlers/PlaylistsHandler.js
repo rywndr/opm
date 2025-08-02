@@ -31,13 +31,21 @@ class PlaylistsHandler {
 
   async getPlaylistsHandler(request, h) {
     const { id: credentialId } = request.auth.credentials;
-    const playlists = await this._service.getPlaylists(credentialId);
-    return {
+    const result = await this._service.getPlaylists(credentialId);
+    
+    const response = h.response({
       status: 'success',
       data: {
-        playlists,
+        playlists: result.playlists,
       },
-    };
+    });
+
+    // Add cache header if data comes from cache
+    if (result.isFromCache) {
+      response.header('X-Data-Source', 'cache');
+    }
+
+    return response;
   }
 
   async deletePlaylistByIdHandler(request, h) {
@@ -82,11 +90,19 @@ class PlaylistsHandler {
     const { id: credentialId } = request.auth.credentials;
 
     await this._service.verifyPlaylistAccess(playlistId, credentialId);
-    const playlist = await this._service.getSongsFromPlaylist(playlistId);
-    return {
+    const result = await this._service.getSongsFromPlaylist(playlistId);
+    
+    const response = h.response({
       status: 'success',
-      data: playlist,
-    };
+      data: result.playlist ? { playlist: result.playlist } : result,
+    });
+
+    // Add cache header if data comes from cache
+    if (result.isFromCache) {
+      response.header('X-Data-Source', 'cache');
+    }
+
+    return response;
   }
 
   async deleteSongFromPlaylistHandler(request, h) {

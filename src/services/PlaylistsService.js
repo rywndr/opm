@@ -6,9 +6,10 @@ const AuthorizationError = require('../exceptions/AuthorizationError');
 const config = require('../utils/config');
 
 class PlaylistsService {
-  constructor(collaborationService) {
+  constructor(collaborationService, cacheService) {
     this._pool = new Pool(config.database);
     this._collaborationService = collaborationService;
+    this._cacheService = cacheService;
   }
 
   async addPlaylist({ name, owner }) {
@@ -25,23 +26,52 @@ class PlaylistsService {
       throw new InvariantError('Playlist gagal ditambahkan');
     }
 
+    // Invalidate user's playlists cache
+    await this._invalidateUserPlaylistsCache(owner);
+
     return result.rows[0].id;
   }
 
   async getPlaylists(owner) {
-    const query = {
-      text: `SELECT p.id, p.name, u.username FROM playlists p 
-             LEFT JOIN collaborations c ON c.playlist_id = p.id 
-             LEFT JOIN users u ON u.id = p.owner 
-             WHERE p.owner = $1 OR c.user_id = $1
-             GROUP BY p.id, p.name, u.username`,
-      values: [owner],
-    };
-    const result = await this._pool.query(query);
-    return result.rows;
+    const cacheKey = `playlists:user:${owner}`;
+    
+    try {
+      // Try to get from cache first
+      const cachedPlaylists = await this._cacheService.get(cacheKey);
+      return {
+        isFromCache: true,
+        playlists: JSON.parse(cachedPlaylists),
+      };
+    } catch (error) {
+      // Cache miss, get from database
+      const query = {
+        text: `SELECT p.id, p.name, u.username FROM playlists p 
+               LEFT JOIN collaborations c ON c.playlist_id = p.id 
+               LEFT JOIN users u ON u.id = p.owner 
+               WHERE p.owner = $1 OR c.user_id = $1
+               GROUP BY p.id, p.name, u.username`,
+        values: [owner],
+      };
+      const result = await this._pool.query(query);
+      
+      // Store in cache for 10 minutes (600 seconds)
+      await this._cacheService.set(cacheKey, JSON.stringify(result.rows), 600);
+      
+      return {
+        isFromCache: false,
+        playlists: result.rows,
+      };
+    }
   }
 
   async deletePlaylistById(id) {
+    // Get playlist owner before deletion for cache invalidation
+    const ownerQuery = {
+      text: 'SELECT owner FROM playlists WHERE id = $1',
+      values: [id],
+    };
+    const ownerResult = await this._pool.query(ownerQuery);
+    
     const query = {
       text: 'DELETE FROM playlists WHERE id = $1 RETURNING id',
       values: [id],
@@ -51,6 +81,12 @@ class PlaylistsService {
 
     if (!result.rows.length) {
       throw new NotFoundError('Playlist gagal dihapus. Id tidak ditemukan');
+    }
+
+    // Invalidate cache for this playlist and owner's playlists
+    if (ownerResult.rows.length > 0) {
+      const owner = ownerResult.rows[0].owner;
+      await this._invalidatePlaylistCache(id, owner);
     }
   }
 
@@ -66,37 +102,60 @@ class PlaylistsService {
     if (!result.rows[0].id) {
       throw new InvariantError('Lagu gagal ditambahkan ke playlist');
     }
+
+    // Invalidate playlist songs cache
+    await this._invalidatePlaylistSongsCache(playlistId);
   }
 
   async getSongsFromPlaylist(playlistId) {
-    const playlistQuery = {
-      text: `SELECT p.id, p.name, u.username FROM playlists p
-             LEFT JOIN users u ON u.id = p.owner
-             WHERE p.id = $1`,
-      values: [playlistId],
-    };
+    const cacheKey = `playlist:${playlistId}:songs`;
+    
+    try {
+      // Try to get from cache first
+      const cachedPlaylistSongs = await this._cacheService.get(cacheKey);
+      return {
+        isFromCache: true,
+        ...JSON.parse(cachedPlaylistSongs),
+      };
+    } catch (error) {
+      // Cache miss, get from database
+      const playlistQuery = {
+        text: `SELECT p.id, p.name, u.username FROM playlists p
+               LEFT JOIN users u ON u.id = p.owner
+               WHERE p.id = $1`,
+        values: [playlistId],
+      };
 
-    const playlistResult = await this._pool.query(playlistQuery);
+      const playlistResult = await this._pool.query(playlistQuery);
 
-    if (!playlistResult.rows.length) {
-      throw new NotFoundError('Playlist tidak ditemukan');
+      if (!playlistResult.rows.length) {
+        throw new NotFoundError('Playlist tidak ditemukan');
+      }
+
+      const songsQuery = {
+        text: `SELECT s.id, s.title, s.performer FROM songs s
+               LEFT JOIN playlist_songs ps ON ps.song_id = s.id
+               WHERE ps.playlist_id = $1`,
+        values: [playlistId],
+      };
+
+      const songsResult = await this._pool.query(songsQuery);
+
+      const result = {
+        playlist: {
+          ...playlistResult.rows[0],
+          songs: songsResult.rows,
+        },
+      };
+      
+      // Store in cache for 10 minutes (600 seconds)
+      await this._cacheService.set(cacheKey, JSON.stringify(result), 600);
+      
+      return {
+        isFromCache: false,
+        ...result,
+      };
     }
-
-    const songsQuery = {
-      text: `SELECT s.id, s.title, s.performer FROM songs s
-             LEFT JOIN playlist_songs ps ON ps.song_id = s.id
-             WHERE ps.playlist_id = $1`,
-      values: [playlistId],
-    };
-
-    const songsResult = await this._pool.query(songsQuery);
-
-    return {
-      playlist: {
-        ...playlistResult.rows[0],
-        songs: songsResult.rows,
-      },
-    };
   }
 
   async getPlaylistForExport(playlistId) {
@@ -140,6 +199,9 @@ class PlaylistsService {
     if (!result.rows.length) {
       throw new InvariantError('Lagu gagal dihapus dari playlist');
     }
+
+    // Invalidate playlist songs cache
+    await this._invalidatePlaylistSongsCache(playlistId);
   }
 
   async verifyPlaylistOwner(id, owner) {
@@ -203,6 +265,34 @@ class PlaylistsService {
 
     const result = await this._pool.query(query);
     return result.rows;
+  }
+  // Private cache invalidation methods
+  async _invalidateUserPlaylistsCache(userId) {
+    try {
+      await this._cacheService.delete(`playlists:user:${userId}`);
+    } catch (error) {
+      console.error('User playlists cache invalidation error:', error);
+    }
+  }
+
+  async _invalidatePlaylistSongsCache(playlistId) {
+    try {
+      await this._cacheService.delete(`playlist:${playlistId}:songs`);
+    } catch (error) {
+      console.error('Playlist songs cache invalidation error:', error);
+    }
+  }
+
+  async _invalidatePlaylistCache(playlistId, owner) {
+    try {
+      // Invalidate playlist songs cache
+      await this._invalidatePlaylistSongsCache(playlistId);
+      
+      // Invalidate user's playlists cache
+      await this._invalidateUserPlaylistsCache(owner);
+    } catch (error) {
+      console.error('Playlist cache invalidation error:', error);
+    }
   }
 }
 

@@ -58,10 +58,10 @@ const init = async () => {
   const cacheService = new CacheService();
   const collaborationsService = new CollaborationsService();
   const albumsService = new AlbumsService(cacheService);
-  const songsService = new SongsService();
+  const songsService = new SongsService(cacheService);
   const usersService = new UsersService();
   const authenticationsService = new AuthenticationsService();
-  const playlistsService = new PlaylistsService(collaborationsService);
+  const playlistsService = new PlaylistsService(collaborationsService, cacheService);
   const storageService = new StorageService();
 
   const server = Hapi.server({
