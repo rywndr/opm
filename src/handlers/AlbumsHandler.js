@@ -72,10 +72,6 @@ class AlbumsHandler {
     const { cover } = request.payload;
     const { id } = request.params;
 
-    // Debug logging
-    console.log('Cover object:', cover);
-    console.log('Cover keys:', cover ? Object.keys(cover) : 'cover is null/undefined');
-
     // Check if cover file exists
     if (!cover) {
       const response = h.response({
@@ -88,7 +84,6 @@ class AlbumsHandler {
 
     // Validate image headers - check if hapi object exists
     if (!cover.hapi || !cover.hapi.headers) {
-      console.log('Cover hapi object:', cover.hapi);
       const response = h.response({
         status: 'fail',
         message: 'Format file tidak valid',
@@ -101,7 +96,6 @@ class AlbumsHandler {
 
     // Check file size (max 512KB = 512000 bytes)
     const fileSize = cover._data ? cover._data.length : (cover.bytes || 0);
-    console.log('File size:', fileSize);
     
     if (fileSize > 512000) {
       const response = h.response({

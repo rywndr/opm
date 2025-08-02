@@ -87,10 +87,10 @@ const init = async () => {
   // static file serving for uploads
   server.route({
     method: 'GET',
-    path: '/upload/{param*}',
+    path: '/upload/images/{param*}',
     handler: {
       directory: {
-        path: path.resolve(__dirname, '../public'),
+        path: path.resolve(__dirname, '../public/uploads/images'),
       },
     },
   });
