@@ -140,6 +140,9 @@ class AlbumsHandler {
     // Check if album exists
     await this._service.getAlbumById(albumId);
 
+    // Verify user hasn't already liked this album
+    await this._service.verifyAlbumLike(userId, albumId);
+
     await this._service.likeAlbum(userId, albumId);
 
     const response = h.response({
